@@ -1,0 +1,9 @@
+# audio recordings (often copyrighted) and build junk
+*.wav
+__pycache__/
+*.pyc
+.DS_Store
+scratchpad/
+mic.wav
+recorded.wav
+song.wav
