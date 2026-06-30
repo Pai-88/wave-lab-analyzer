@@ -248,6 +248,8 @@
     background:linear-gradient(180deg,#c6a9ff,#9b4dff 52%,#7a27e0) !important;color:#fff !important;
     text-shadow:0 1px 2px rgba(0,0,0,.3) !important}
   .idbtn:disabled{filter:saturate(.65) brightness(.92);cursor:default}
+  .aibtn{margin-bottom:10px;background:linear-gradient(180deg,#7fe6cf,#16a88a 52%,#0c7d66) !important;color:#02261f !important}
+  .aibtn.busy{background:linear-gradient(180deg,#7fe6cf,#0c7d66) !important}
   .idbtn.busy{background:linear-gradient(180deg,#b79bff,#7a3fd6 52%,#5e1fc0) !important}
   @keyframes y2kspin{to{transform:rotate(360deg)}}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.4);
@@ -341,6 +343,7 @@
       <div class="ctl-title">Song ID · Recognize What's Playing</div>
       <input id="auddToken" class="tokin" type="password" placeholder="AudD API token — free at audd.io">
       <button id="idBtn" class="idbtn" type="button">◉ Identify Song</button>
+      <button id="aiBtn" class="idbtn aibtn" type="button">🧠 AI Sound (in-browser NN)</button>
       <div class="ml-screen songscr">
         <div class="lab">◢ NOW PLAYING ◣</div>
         <div class="pred song-title" id="songTitle">— press Identify —</div>
@@ -370,7 +373,7 @@ const ledPwr=$("ledPwr"),ledSig=$("ledSig");
 const scopeC=$("scope"),scopeX=scopeC.getContext("2d");
 const specC=$("spec"),specX=specC.getContext("2d");
 const waveC=$("wave"),waveX=waveC.getContext("2d");
-const idBtn=$("idBtn"),auddToken=$("auddToken"),songTitle=$("songTitle"),
+const idBtn=$("idBtn"),aiBtn=$("aiBtn"),auddToken=$("auddToken"),songTitle=$("songTitle"),
   songArtist=$("songArtist"),songLink=$("songLink"),idStatus=$("idStatus");
 const lissaC=$("lissa"),lissaX=lissaC.getContext("2d");
 const synthC=$("synth"),synthX=synthC.getContext("2d");
@@ -539,6 +542,67 @@ async function identifySong(){
   clearInterval(tick); idBtn.disabled=false; idBtn.classList.remove("busy"); idBtn.textContent="◉ Identify Song";
 }
 idBtn.onclick=identifySong;
+
+/* ---------- In-browser neural net: YAMNet (TensorFlow.js) ----------
+   A real CNN that classifies sound into 521 AudioSet classes (Music, Singing,
+   Guitar, Speech, Drum…). Loaded lazily on first click so the page stays light. */
+let yamnet=null, yamnetLabels=null;
+function loadScript(src){return new Promise((res,rej)=>{
+  const s=document.createElement("script"); s.src=src; s.onload=res;
+  s.onerror=()=>rej(new Error("couldn't load "+src)); document.head.appendChild(s); });}
+async function ensureYamnet(progress){
+  if(yamnet) return;
+  if(!window.tf){ progress&&progress("Loading TensorFlow.js…");
+    await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"); }
+  progress&&progress("Loading YAMNet (~15MB, once)…");
+  yamnet=await tf.loadGraphModel("https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1",{fromTFHub:true});
+  try{
+    const csv=await (await fetch("https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv")).text();
+    yamnetLabels=csv.trim().split("\n").slice(1).map(line=>{
+      const m=line.match(/^\d+,[^,]*,(.*)$/); let n=m?m[1]:line;
+      if(n[0]==='"'&&n[n.length-1]==='"') n=n.slice(1,-1).replace(/""/g,'"'); return n; });
+  }catch(e){ yamnetLabels=null; }
+}
+async function classifySound(){
+  if(!stream){ alert("Press ⏻ POWER first so the mic is live, then play a sound and classify."); return; }
+  const busy=l=>{ aiBtn.classList.add("busy"); aiBtn.innerHTML='<span class="spin"></span>'+l; };
+  aiBtn.disabled=true; setSong("…","");
+  try{
+    busy("Loading AI…"); await ensureYamnet(s=>{ busy(s); setStatus(s); });
+    busy("Listening 2s…"); setStatus("◉ Listening — keep the sound playing…");
+    const mime=(window.MediaRecorder&&MediaRecorder.isTypeSupported("audio/webm"))?"audio/webm":"";
+    const rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined); const chunks=[];
+    rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    const done=new Promise(r=>{ rec.onstop=r; });
+    rec.start(); setTimeout(()=>{ if(rec.state!=="inactive") rec.stop(); }, 2000); await done;
+    busy("Classifying…"); setStatus("◉ Running neural net…");
+    const ab=await new Blob(chunks,{type:mime||"audio/webm"}).arrayBuffer();
+    const ac=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const decoded=await ac.decodeAudioData(ab);
+    // resample to mono 16 kHz (what YAMNet expects)
+    const len=Math.max(16000, Math.ceil(decoded.duration*16000));
+    const off=new OfflineAudioContext(1, len, 16000);
+    const src=off.createBufferSource(); src.buffer=decoded; src.connect(off.destination); src.start();
+    const wav=(await off.startRendering()).getChannelData(0);
+    const arr=tf.tidy(()=>{
+      const out=yamnet.execute(tf.tensor1d(Float32Array.from(wav)));
+      const list=Array.isArray(out)?out:[out];
+      // the class-scores tensor is the one whose last dim is 521
+      const scores=list.find(t=>t.shape[t.shape.length-1]===521)||list[0];
+      return scores.mean(0);                                // [frames,521] -> [521]
+    });
+    const data=await arr.data(); arr.dispose();
+    const top=Array.from(data.keys()).sort((a,b)=>data[b]-data[a]).slice(0,3);
+    const name=i=> yamnetLabels?yamnetLabels[i]:("class "+i);
+    setSong(name(top[0]),"");
+    songArtist.textContent=top.slice(1).map(i=>name(i)+" "+Math.round(data[i]*100)+"%").join("   ");
+    songLink.style.display="none";
+    setStatus("AI ✓ "+name(top[0])+" "+Math.round(data[top[0]]*100)+"%  (YAMNet, in-browser)");
+  }catch(err){ setSong("—",""); setStatus("AI failed: "+err.message); }
+  aiBtn.disabled=false; aiBtn.classList.remove("busy"); aiBtn.textContent="🧠 AI Sound (in-browser NN)";
+}
+aiBtn.onclick=classifySound;
+
 /* remember the AudD token so you only paste it once */
 try{ auddToken.value=localStorage.getItem("auddToken")||""; }catch(e){}
 auddToken.addEventListener("change",()=>{ try{localStorage.setItem("auddToken",auddToken.value.trim());}catch(e){} });

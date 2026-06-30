@@ -31,6 +31,7 @@ The single-screen dashboard (`live.html`) shows, live from your microphone:
 - **Measurements** — level/peak (dB), fundamental, period, wavelength in air, spectral centroid ("brightness"), zero-crossing rate
 - **Filters** — low / high / band-pass (live, with optional monitoring)
 - **Song ID** — record a few seconds and recognize the track (title + artist + Spotify link)
+- **AI Sound** — a real neural network (YAMNet) running **in the browser** via TensorFlow.js, classifying the sound into 521 categories (Music, Singing, Guitar, Speech, Drum…) — no server, no API call
 
 ## Run it locally
 
