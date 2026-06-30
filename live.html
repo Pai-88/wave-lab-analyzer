@@ -712,6 +712,32 @@ micSel.onchange=()=>{if(stream)start(micSel.value).catch(console.error);};
   }
   requestAnimationFrame(draw);
 })();
+
+/* ===== optional demo mode: open live.html#demo to see it animate with no mic ===== */
+if(/demo/i.test(location.hash+location.search)){
+  (function demo(){
+    sampleRate=48000; const bins=FFT/2, binHz=sampleRate/FFT;
+    waveBuf=new Float32Array(FFT);
+    const harm=[[1,1.0],[2,0.5],[3,0.32],[4,0.18],[5,0.1]];
+    const melody=[147,165,196,220,247,220,196,165]; let mi=0;
+    function setSignal(){
+      const f0=melody[mi++%melody.length];
+      timeBytes=new Uint8Array(FFT);
+      for(let i=0;i<FFT;i++){const t=i/sampleRate;let s=0;for(const[k,a]of harm)s+=a*Math.sin(2*Math.PI*f0*k*t);
+        timeBytes[i]=Math.max(0,Math.min(255,Math.round(128+66*s/2.0)));}
+      freqDb=new Float32Array(bins).fill(-92);
+      for(const[k,a]of harm){const c=Math.round(f0*k/binHz);
+        for(let d=-3;d<=3;d++){const i=c+d;if(i>0&&i<bins)freqDb[i]=Math.max(freqDb[i],(20*Math.log10(a))-6-Math.abs(d)*5);}}
+    }
+    setSignal(); setInterval(setSignal,1400);
+    analyser={frequencyBinCount:bins,fftSize:FFT,
+      getFloatFrequencyData(a){a.set(freqDb);}, getByteTimeDomainData(a){a.set(timeBytes);}};
+    ledPwr.classList.add("on"); ledSig.classList.add("on");
+    songTitle.textContent="demo mode"; songArtist.textContent="";
+    setStatus("reload without #demo, press Power, and use your real mic");
+    fitAll(); loop();
+  })();
+}
 </script>
 </body>
 </html>
