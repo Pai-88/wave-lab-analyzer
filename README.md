@@ -1,4 +1,4 @@
-# 🌊 Wave Lab — Real-Time Harmonic Analyzer
+# Wave Lab — Real-Time Harmonic Analyzer
 
 A browser-based audio analyzer with a glossy Y2K aesthetic. Play any sound into
 your mic and watch it broken into its sine-wave ingredients in real time — plus
@@ -6,14 +6,14 @@ filters, full wave analysis, and Shazam-style song recognition.
 
 ![Wave Lab — real-time harmonic analyzer](screenshot.png)
 
-### ▶ Live demo (no install)
+### Live demo (no install)
 **https://pai-88.github.io/wave-lab-analyzer/live.html**
 
 > Want to see it move without granting mic access? Open
 > **[live.html#demo](https://pai-88.github.io/wave-lab-analyzer/live.html#demo)** —
 > it auto-runs on a synthetic signal.
 
-> Click **⏻ Power**, allow the microphone, and play some music nearby.
+> Click **Power**, allow the microphone, and play some music nearby.
 > Works on desktop and phone. (Mic needs HTTPS — the live link above is HTTPS, so you're good.)
 
 ---
