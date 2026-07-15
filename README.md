@@ -22,16 +22,16 @@ filters, full wave analysis, and Shazam-style song recognition.
 
 The single-screen dashboard (`live.html`) shows, live from your microphone:
 
-- **Decomposition scope** — each dominant frequency drawn as its own travelling sine wave, labelled with note (e.g. `440 Hz · A4`)
-- **Spectrum analyzer** — every sine wave present, strongest peaks marked
-- **Waveform** — the raw sound over time
-- **Phase scope** — X-Y Lissajous figure
-- **Fourier synthesis** — the detected sines re-summed (real DFT, phase-aligned) overlaid on the real wave
-- **Harmonics meter** — strength of H1–H8
-- **Measurements** — level/peak (dB), fundamental, period, wavelength in air, spectral centroid ("brightness"), zero-crossing rate
-- **Filters** — low / high / band-pass (live, with optional monitoring)
-- **Song ID** — record a few seconds and recognize the track (title + artist + Spotify link)
-- **AI Sound** — a real neural network (YAMNet) running **in the browser** via TensorFlow.js, classifying the sound into 521 categories (Music, Singing, Guitar, Speech, Drum…) — no server, no API call
+- **Decomposition scope**: each dominant frequency drawn as its own travelling sine wave, labelled with note (e.g. `440 Hz · A4`)
+- **Spectrum analyzer**: every sine wave present, strongest peaks marked
+- **Waveform**: the raw sound over time
+- **Phase scope**: X-Y Lissajous figure
+- **Fourier synthesis**: the detected sines re-summed (real DFT, phase-aligned) overlaid on the real wave
+- **Harmonics meter**: strength of H1–H8
+- **Measurements**: level/peak (dB), fundamental, period, wavelength in air, spectral centroid ("brightness"), zero-crossing rate
+- **Filters**: low / high / band-pass (live, with optional monitoring)
+- **Song ID**: record a few seconds and recognize the track (title + artist + Spotify link)
+- **AI Sound**: a real neural network (YAMNet) running **in the browser** via TensorFlow.js, classifying the sound into 521 categories (Music, Singing, Guitar, Speech, Drum…) — no server, no API call
 
 ## Run it locally
 
@@ -54,7 +54,7 @@ recognitions; after that it's pay-as-you-go.
 
 ## Also included
 
-- **`wave_lab.py`** — a desktop (matplotlib) version: record from the mic and get the
+- **`wave_lab.py`**: a desktop (matplotlib) version: record from the mic and get the
   Fourier breakdown, plus a Laplace s-plane view.
   ```bash
   pip install numpy scipy matplotlib sounddevice soundfile
@@ -62,7 +62,7 @@ recognitions; after that it's pay-as-you-go.
   python3 wave_lab.py live --device 3    # real-time window
   python3 wave_lab.py record --seconds 20 --device 3
   ```
-- **`wave_lab_colab.ipynb`** — a Google Colab notebook (live spectrum, filters, and an
+- **`wave_lab_colab.ipynb`**: a Google Colab notebook (live spectrum, filters, and an
   ML pitch-detection demo). `build_colab.py` generates it.
 
 ## How it works
