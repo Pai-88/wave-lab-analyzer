@@ -341,7 +341,7 @@
 
     <div class="panel area-classifier">
       <div class="ctl-title">Song ID · Recognize What's Playing</div>
-      <input id="auddToken" class="tokin" type="password" placeholder="AudD API token — free at audd.io">
+      <input id="auddToken" class="tokin" type="password" placeholder="AudD API token (free at audd.io)" autocomplete="off">
       <button id="idBtn" class="idbtn" type="button">◉ Identify Song</button>
       <button id="aiBtn" class="idbtn aibtn" type="button">🧠 AI Sound (in-browser NN)</button>
       <div class="ml-screen songscr">
@@ -363,6 +363,8 @@ function noteName(f){ if(f<=0)return""; const m=Math.round(69+12*Math.log2(f/440
 let audioCtx,analyser,stream,raf,freqDb,timeBytes,waveBuf,sampleRate=48000;
 let filterNode,monitorOn=false,filterMode="off";
 const FFT=8192;
+/* Song ID relay: holds the AudD token server-side so nobody has to paste one. Empty string = no relay. */
+const ID_PROXY="";   /* set to the deployed api/identify.js address once it is live */
 
 const $=id=>document.getElementById(id);
 const startBtn=$("startBtn"),stopBtn=$("stopBtn"),micSel=$("micSel");
@@ -513,7 +515,8 @@ function setSong(title,artist,url){
 async function identifySong(){
   if(!stream){ alert("Press ⏻ POWER first so the mic is live, then play a song and Identify."); return; }
   const token=(auddToken.value||"").trim();
-  if(!token){ auddToken.focus(); setStatus("Paste a free AudD token (audd.io) first."); return; }
+  const viaRelay=!token&&!!ID_PROXY;
+  if(!token&&!viaRelay){ auddToken.focus(); setStatus("Paste a free AudD token (audd.io) first."); return; }
   const idBusy=l=>{ idBtn.innerHTML='<span class="spin"></span>'+l; };
   let secs=6; idBtn.disabled=true; idBtn.classList.add("busy"); idBusy("Listening "+secs+"s");
   const tick=setInterval(()=>{ secs--; if(secs>0) idBusy("Listening "+secs+"s"); },1000);
@@ -528,9 +531,15 @@ async function identifySong(){
     clearInterval(tick); idBusy("Identifying…");
     const blob=new Blob(chunks,{type:mime||"audio/webm"});
     setStatus("◉ Identifying…");
-    const fd=new FormData();
-    fd.append("api_token",token); fd.append("file",blob,"clip.webm"); fd.append("return","spotify");
-    const j=await (await fetch("https://api.audd.io/",{method:"POST",body:fd})).json();
+    let j;
+    if(viaRelay){
+      /* the relay adds the token itself; only the clip travels */
+      j=await (await fetch(ID_PROXY,{method:"POST",headers:{"Content-Type":blob.type||"audio/webm"},body:blob})).json();
+    } else {
+      const fd=new FormData();
+      fd.append("api_token",token); fd.append("file",blob,"clip.webm"); fd.append("return","spotify");
+      j=await (await fetch("https://api.audd.io/",{method:"POST",body:fd})).json();
+    }
     if(j.status!=="success"){ setSong("—",""); setStatus("AudD error: "+((j.error&&j.error.error_message)||"request failed")); }
     else if(!j.result){ setSong("no match",""); setStatus("No match — try a louder / clearer part of the song."); }
     else{
@@ -604,9 +613,20 @@ async function classifySound(){
 aiBtn.onclick=classifySound;
 
 /* remember the AudD token so you only paste it once */
-try{ auddToken.value=localStorage.getItem("auddToken")||""; }catch(e){}
-auddToken.addEventListener("change",()=>{ try{localStorage.setItem("auddToken",auddToken.value.trim());}catch(e){} });
-if(auddToken.value) setStatus("token saved — power on, play a song, hit Identify");
+/* a pasted token is kept on this device. A private bookmark of the form live.html#k=TOKEN also works: the key is
+   stored, then removed from the address bar so it never shows in the history. */
+function saveToken(){ try{ const v=auddToken.value.trim(); if(v) localStorage.setItem("auddToken",v); else localStorage.removeItem("auddToken"); }catch(e){} }
+try{
+  const m=/[#&?]k=([^&#]+)/.exec(location.hash+location.search);
+  if(m){ auddToken.value=decodeURIComponent(m[1]); saveToken();
+         history.replaceState(null,"",location.pathname+location.search.replace(/[?&]k=[^&#]+/,"")+location.hash.replace(/[#&]k=[^&#]+/,"")); }
+  if(!auddToken.value) auddToken.value=localStorage.getItem("auddToken")||"";
+}catch(e){}
+auddToken.addEventListener("input",saveToken);
+auddToken.addEventListener("change",saveToken);
+if(auddToken.value) setStatus("your token is saved on this device — power on, play a song, hit Identify");
+else if(ID_PROXY) setStatus("no token needed — power on, play a song, hit Identify");
+if(ID_PROXY) auddToken.placeholder="optional: your own AudD token (works without one)";
 
 const MIN_DB=-92,AMBER="#28e6ff",AMBER_DIM="#7fe4ff";
 let frame=0;

@@ -31,7 +31,13 @@ python3 -m http.server 8000
 # open http://localhost:8000/live.html
 ```
 
-Song ID needs a free AudD API token, entered once in the Song ID box. It is stored in the browser's localStorage and never committed.
+## Song ID without typing the token
+
+Song ID uses the [AudD](https://audd.io) API, which needs a token. Three ways to stop typing it:
+
+- **Once per device.** A token pasted into the Song ID box is kept in the browser's storage and restored on the next visit. It is never committed.
+- **A private bookmark.** Open `live.html?k=YOUR_TOKEN` once; the page stores the token and removes it from the address bar before the URL reaches the history. Keep that bookmark to yourself, it carries the key.
+- **The relay.** `api/identify.js` is a small Vercel function that holds the token in the server-side variable `AUDD_TOKEN`, accepts the recorded clip from this page's own origins only, limits each address to six identifications per ten minutes, and forwards the clip to AudD. With it deployed, nobody needs a token. Deploy with the Vercel CLI from this folder, set `AUDD_TOKEN` in the project settings, and put the function's address in `ID_PROXY` at the top of the script in `live.html`. A pasted token still bypasses the relay and uses that user's own quota. Keep the AudD account on its free tier or set a spending cap there.
 
 ## Also included
 
