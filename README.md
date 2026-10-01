@@ -31,6 +31,10 @@ python3 -m http.server 8000
 # open http://localhost:8000/live.html
 ```
 
+## Song ID that runs by itself
+
+Press Power, play music, wait a few seconds: once the signal has been steady for four seconds the page records a clip and names the track. It then waits before the next attempt (150 s after a match, 240 s if the same song comes back, 45 s after no match) so a free AudD quota lasts. The AUTO ID button turns this off; the Identify button still works by hand.
+
 ## Song ID without typing the token
 
 Song ID uses the [AudD](https://audd.io) API, which needs a token. Three ways to stop typing it:

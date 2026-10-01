@@ -343,6 +343,7 @@
       <div class="ctl-title">Song ID · Recognize What's Playing</div>
       <input id="auddToken" class="tokin" type="password" placeholder="AudD API token (free at audd.io)" autocomplete="off">
       <button id="idBtn" class="idbtn" type="button">◉ Identify Song</button>
+      <button id="autoBtn" class="idbtn" type="button" title="identify by itself whenever music is playing">AUTO ID: ON</button>
       <button id="aiBtn" class="idbtn aibtn" type="button">🧠 AI Sound (in-browser NN)</button>
       <div class="ml-screen songscr">
         <div class="lab">◢ NOW PLAYING ◣</div>
@@ -512,11 +513,14 @@ function setSong(title,artist,url){
   songArtist.textContent=artist||"";
   if(url){ songLink.href=url; songLink.style.display=""; } else { songLink.style.display="none"; }
 }
-async function identifySong(){
-  if(!stream){ alert("Press ⏻ POWER first so the mic is live, then play a song and Identify."); return; }
+let idRunning=false;
+async function identifySong(auto){
+  if(!stream){ if(!auto) alert("Press ⏻ POWER first so the mic is live, then play a song and Identify."); return "nostream"; }
+  if(idRunning) return "busy";
+  idRunning=true; let outcome="error";
   const token=(auddToken.value||"").trim();
   const viaRelay=!token&&!!ID_PROXY;
-  if(!token&&!viaRelay){ auddToken.focus(); setStatus("Paste a free AudD token (audd.io) first."); return; }
+  if(!token&&!viaRelay){ idRunning=false; if(!auto){ auddToken.focus(); setStatus("Paste a free AudD token (audd.io) first."); } return "noway"; }
   const idBusy=l=>{ idBtn.innerHTML='<span class="spin"></span>'+l; };
   let secs=6; idBtn.disabled=true; idBtn.classList.add("busy"); idBusy("Listening "+secs+"s");
   const tick=setInterval(()=>{ secs--; if(secs>0) idBusy("Listening "+secs+"s"); },1000);
@@ -541,15 +545,38 @@ async function identifySong(){
       j=await (await fetch("https://api.audd.io/",{method:"POST",body:fd})).json();
     }
     if(j.status!=="success"){ setSong("—",""); setStatus("AudD error: "+((j.error&&j.error.error_message)||"request failed")); }
-    else if(!j.result){ setSong("no match",""); setStatus("No match — try a louder / clearer part of the song."); }
+    else if(!j.result){ outcome="nomatch"; setSong("no match",""); setStatus(auto?"No match yet — still listening":"No match — try a louder / clearer part of the song."); }
     else{
+      outcome=(lastMatch===j.result.title+"|"+j.result.artist)?"same":"matched"; lastMatch=j.result.title+"|"+j.result.artist;
       const r=j.result, sp=r.spotify, url=sp&&sp.external_urls&&sp.external_urls.spotify;
       setSong(r.title, r.artist, url);
-      setStatus("Matched ✓"+(r.album?(" · "+r.album):"")+(r.release_date?(" · "+r.release_date.slice(0,4)):""));
+      setStatus("Matched ✓"+(r.album?(" · "+r.album):"")+(r.release_date?(" · "+r.release_date.slice(0,4)):"")+(auto?" · auto":""));
     }
   }catch(err){ setSong("—",""); setStatus("Failed: "+err.message+" (network or CORS)"); }
   clearInterval(tick); idBtn.disabled=false; idBtn.classList.remove("busy"); idBtn.textContent="◉ Identify Song";
+  idRunning=false; return outcome;
 }
+let lastMatch="";
+
+/* ===== auto ID: press Power, play music, the page identifies by itself =====
+   Trigger: a steady signal for 4 s. Then wait before the next attempt: 150 s after a match (a song lasts that long),
+   240 s if the same song comes back, 45 s after no match, 120 s after an error. Keeps the AudD quota for real changes. */
+const autoBtn=$("autoBtn");
+let autoId=true, nextAuto=0, sigSince=0, lastEnergy=0;
+try{ autoId=(localStorage.getItem("autoId")||"on")==="on"; }catch(e){}
+function paintAuto(){ autoBtn.textContent="AUTO ID: "+(autoId?"ON":"OFF"); autoBtn.style.opacity=autoId?"1":".55"; }
+autoBtn.onclick=()=>{ autoId=!autoId; try{localStorage.setItem("autoId",autoId?"on":"off");}catch(e){} paintAuto();
+  setStatus(autoId?"auto ID on — play music and wait a few seconds":"auto ID off"); };
+paintAuto();
+setInterval(()=>{
+  if(!autoId||!stream||idRunning) return;
+  const now=Date.now();
+  if(lastEnergy>0.4){ if(!sigSince) sigSince=now; } else { sigSince=0; return; }
+  if(now-sigSince<4000||now<nextAuto) return;
+  const haveWay=ID_PROXY||(auddToken.value||"").trim();
+  if(!haveWay){ setStatus("auto ID is waiting for a token or the relay"); nextAuto=now+60000; return; }
+  identifySong(true).then(o=>{ nextAuto=Date.now()+(o==="matched"?150000:o==="same"?240000:o==="nomatch"?45000:120000); });
+},1000);
 idBtn.onclick=identifySong;
 
 /* ---------- In-browser neural net: YAMNet (TensorFlow.js) ----------
@@ -624,8 +651,8 @@ try{
 }catch(e){}
 auddToken.addEventListener("input",saveToken);
 auddToken.addEventListener("change",saveToken);
-if(auddToken.value) setStatus("your token is saved on this device — power on, play a song, hit Identify");
-else if(ID_PROXY) setStatus("no token needed — power on, play a song, hit Identify");
+if(auddToken.value) setStatus("token saved on this device — press Power and play music; it identifies by itself");
+else if(ID_PROXY) setStatus("no token needed — press Power and play music; it identifies by itself");
 if(ID_PROXY) auddToken.placeholder="optional: your own AudD token (works without one)";
 
 const MIN_DB=-92,AMBER="#28e6ff",AMBER_DIM="#7fe4ff";
@@ -643,7 +670,7 @@ function loop(){
   const peaks=pickPeaks(lin,binHz,nPk,fmax),tNow=performance.now()/1000;
   const maxLin=peaks.length?lin[peaks[0]]:1;
   let energy=0;for(let i=0;i<nBins;i++)energy+=lin[i];
-  ledSig.classList.toggle("on",energy>0.4);
+  ledSig.classList.toggle("on",energy>0.4); lastEnergy=energy;
 
   /* ===== scope ===== */
   scopeX.clearRect(0,0,SC.w,SC.h);
